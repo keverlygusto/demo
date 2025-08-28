@@ -142,7 +142,10 @@
       throw new Error('Invalid symbol. Please try a different ticker.');
     }
     if (!json || !json['Time Series (Daily)']) {
-      throw new Error('Unexpected API response. Try again later.');
+      const err = new Error('Missing daily time series.');
+      err.code = 'MISSING_SERIES';
+      err.payload = json;
+      throw err;
     }
 
     const dataObj = json['Time Series (Daily)'];
@@ -156,10 +159,33 @@
       return await fetchDailyAdjusted(symbol);
     } catch (err) {
       if (err && err.code === 'MISSING_SERIES') {
-        return await fetchDaily(symbol);
+        try {
+          return await fetchDaily(symbol);
+        } catch (err2) {
+          throw err2;
+        }
       }
       throw err;
     }
+  }
+
+  async function validateSymbolViaSearch(symbol) {
+    const params = new URLSearchParams({
+      function: 'SYMBOL_SEARCH',
+      keywords: symbol,
+      apikey: API_KEY,
+    });
+    const url = `${API_URL}?${params.toString()}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Network error: ${resp.status}`);
+    const json = await resp.json();
+    if (json && json.Note) {
+      throw new Error('API rate limit reached during symbol validation. Please wait a minute and try again.');
+    }
+    const matches = Array.isArray(json.bestMatches) ? json.bestMatches : [];
+    const upper = symbol.toUpperCase();
+    const exact = matches.find(m => (m['1. symbol'] || '').toUpperCase() === upper);
+    return { exactMatch: Boolean(exact), matches };
   }
 
   function pickRandomStartIndex(datesAsc) {
@@ -296,9 +322,26 @@
       enableGameControls(true);
       setStatus('Make your prediction for the day AFTER the starting date.');
     } catch (err) {
-      console.error(err);
+      console.error('Alpha Vantage error:', err);
+      // If series missing, try SYMBOL_SEARCH to provide a clearer message
+      if (err && err.code === 'MISSING_SERIES') {
+        try {
+          const result = await validateSymbolViaSearch(symbol);
+          if (!result.exactMatch) {
+            const suggestion = (result.matches[0] && result.matches[0]['1. symbol']) || '';
+            const suffix = suggestion ? ` Did you mean ${suggestion}?` : '';
+            resetGameUI();
+            setStatus(`Ticker not found or no daily time series available.${suffix}`, 'error');
+            return;
+          }
+        } catch (vErr) {
+          console.warn('Validation error:', vErr);
+        }
+      }
+
       resetGameUI();
-      setStatus(err.message || 'Failed to load data.', 'error');
+      const message = (err && err.message) ? err.message : 'Failed to load data.';
+      setStatus(message, 'error');
     }
   }
 
