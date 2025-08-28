@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stock Direction Prediction Game</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Stock Direction Prediction Game</h1>
+    <p>Guess if the next day's closing price goes up or down.</p>
+  </header>
+
+  <main class="container">
+    <section class="controls">
+      <form id="ticker-form" class="ticker-form" autocomplete="off">
+        <label for="ticker-input">Enter a stock ticker (e.g., MSFT, COF):</label>
+        <div class="row">
+          <input id="ticker-input" name="ticker" type="text" placeholder="AAPL" required>
+          <button id="load-btn" type="submit">Load</button>
+        </div>
+        <small class="hint">Real data via Alpha Vantage. No demo data is used.</small>
+      </form>
+      <div id="status" class="status" aria-live="polite"></div>
+      <div class="game-meta">
+        <div><strong>Selected Ticker:</strong> <span id="selected-ticker">—</span></div>
+        <div><strong>Starting Date:</strong> <span id="starting-date">—</span></div>
+        <div><strong>Current Date:</strong> <span id="current-date">—</span></div>
+        <div><strong>Score:</strong> <span id="score">0</span></div>
+      </div>
+      <div class="actions">
+        <button id="guess-up" disabled>Price Up ▲</button>
+        <button id="guess-down" disabled>Price Down ▼</button>
+        <button id="end-game" disabled>End Game</button>
+      </div>
+    </section>
+
+    <section class="chart-section">
+      <canvas id="price-chart" height="200"></canvas>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Data source: <a href="https://www.alphavantage.co/" target="_blank" rel="noopener noreferrer">Alpha Vantage</a></p>
+  </footer>
+
+  <script src="./script.js"></script>
+  
+</body>
+</html>
+
