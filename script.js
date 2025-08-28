@@ -101,11 +101,16 @@
     if (json && json.Note) {
       throw new Error('API rate limit reached. Please wait a minute and try again.');
     }
+    if (json && json.Information) {
+      throw new Error(json.Information);
+    }
     if (json && json['Error Message']) {
       throw new Error('Invalid symbol. Please try a different ticker.');
     }
     if (!json || !json['Time Series (Daily)']) {
-      throw new Error('Unexpected API response. Try again later.');
+      const err = new Error('Missing adjusted daily time series.');
+      err.code = 'MISSING_SERIES';
+      throw err;
     }
 
     // For adjusted endpoint, data is in 'Time Series (Daily)'
@@ -113,6 +118,48 @@
     const dates = Object.keys(dataObj).sort();
     const closes = dates.map(d => Number(dataObj[d]['5. adjusted close'] || dataObj[d]['4. close']));
     return { datesAsc: dates, closeAsc: closes };
+  }
+
+  async function fetchDaily(symbol) {
+    const params = new URLSearchParams({
+      function: 'TIME_SERIES_DAILY',
+      symbol,
+      apikey: API_KEY,
+      outputsize: 'compact',
+    });
+    const url = `${API_URL}?${params.toString()}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Network error: ${resp.status}`);
+    const json = await resp.json();
+
+    if (json && json.Note) {
+      throw new Error('API rate limit reached. Please wait a minute and try again.');
+    }
+    if (json && json.Information) {
+      throw new Error(json.Information);
+    }
+    if (json && json['Error Message']) {
+      throw new Error('Invalid symbol. Please try a different ticker.');
+    }
+    if (!json || !json['Time Series (Daily)']) {
+      throw new Error('Unexpected API response. Try again later.');
+    }
+
+    const dataObj = json['Time Series (Daily)'];
+    const dates = Object.keys(dataObj).sort();
+    const closes = dates.map(d => Number(dataObj[d]['4. close']));
+    return { datesAsc: dates, closeAsc: closes };
+  }
+
+  async function fetchDailyWithFallback(symbol) {
+    try {
+      return await fetchDailyAdjusted(symbol);
+    } catch (err) {
+      if (err && err.code === 'MISSING_SERIES') {
+        return await fetchDaily(symbol);
+      }
+      throw err;
+    }
   }
 
   function pickRandomStartIndex(datesAsc) {
@@ -223,7 +270,7 @@
     enableGameControls(false);
 
     try {
-      const { datesAsc, closeAsc } = await fetchDailyAdjusted(symbol);
+      const { datesAsc, closeAsc } = await fetchDailyWithFallback(symbol);
 
       // Pick random start date within constraints
       const startIndex = pickRandomStartIndex(datesAsc);
