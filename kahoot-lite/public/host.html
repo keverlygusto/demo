@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Kahoot-Lite Host</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid #444; cursor: pointer; }
+    .choices { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#eee; margin-right:8px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    h1,h2,h3 { margin: 8px 0; }
+  </style>
+  <link rel="icon" href="data:," />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' ws: http: https:; connect-src * ws:;" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+</head>
+<body>
+  <h1>Kahoot-Lite Host</h1>
+  <div class="card" id="host-controls">
+    <button id="create" class="btn">Create Game</button>
+    <span id="pin" style="font-size:20px; margin-left:12px;"></span>
+    <button id="start" class="btn" style="margin-left:12px;" disabled>Start</button>
+    <button id="next" class="btn" style="margin-left:12px;" disabled>Next</button>
+  </div>
+
+  <div class="card" id="lobby">
+    <h2>Lobby</h2>
+    <div>Tell players to visit <b>/player.html</b> and enter PIN <b id="pin2">—</b></div>
+    <div id="players"></div>
+  </div>
+
+  <div class="card" id="question" style="display:none;">
+    <div class="grid">
+      <div>
+        <h2 id="qPrompt"></h2>
+        <div class="choices" id="qChoices"></div>
+      </div>
+      <div>
+        <h3>Time left: <span id="timeLeft">—</span>s</h3>
+        <div>Remaining answers: <span id="remaining">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="reveal" style="display:none;">
+    <h2>Answer: <span id="correct">—</span></h2>
+    <div id="perPlayer"></div>
+  </div>
+
+  <div class="card" id="board" style="display:none;">
+    <h2>Leaderboard</h2>
+    <ol id="boardList"></ol>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let pin = null;
+    let timer = null;
+    let endsAt = 0;
+
+    const $ = (id) => document.getElementById(id);
+    const show = (id, on=true) => ($(id).style.display = on ? "block" : "none");
+
+    $("create").onclick = () => {
+      socket.emit("host:createGame", {}, ({ pin: newPin }) => {
+        pin = newPin;
+        $("pin").textContent = "PIN: " + pin;
+        $("pin2").textContent = pin;
+        $("start").disabled = false;
+      });
+    };
+
+    $("start").onclick = () => {
+      socket.emit("host:start", { pin });
+      $("start").disabled = true;
+      $("next").disabled = true;
+    };
+
+    $("next").onclick = () => {
+      socket.emit("host:next", { pin });
+      $("next").disabled = true;
+    };
+
+    socket.on("lobby:update", (lobby) => {
+      $("players").innerHTML = (lobby.players || [])
+        .map(p => `<span class="pill">${p.name} • ${p.score}</span>`).join("");
+      if (pin && lobby.count >= 1) $("start").disabled = false;
+      show("lobby", true);
+    });
+
+    socket.on("question:show", (q) => {
+      show("reveal", false);
+      show("board", false);
+      show("question", true);
+      $("qPrompt").textContent = `Q${q.index+1}/${q.total}: ${q.prompt}`;
+      $("qChoices").innerHTML = q.choices
+        .map((c, i) => `<div class="card">${String.fromCharCode(65+i)}. ${c}</div>`).join("");
+      $("remaining").textContent = "—";
+      $("timeLeft").textContent = q.timeLimitSec;
+      // countdown
+      endsAt = Date.now() + q.timeLimitSec*1000;
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => {
+        const left = Math.max(0, Math.ceil((endsAt - Date.now())/1000));
+        $("timeLeft").textContent = left;
+        if (left <= 0) clearInterval(timer);
+      }, 200);
+    });
+
+    socket.on("question:progress", ({ remaining }) => {
+      $("remaining").textContent = remaining;
+    });
+
+    socket.on("question:reveal", ({ correctIndex, players }) => {
+      show("question", false);
+      show("reveal", true);
+      $("correct").textContent = String.fromCharCode(65 + correctIndex);
+      $("perPlayer").innerHTML = players
+        .map(p => `<div class="pill">${p.name}: ${p.lastCorrect ? "✅" : "❌"} (+${p.lastDelta}) → ${p.total}</div>`)
+        .join("");
+      $("next").disabled = false;
+    });
+
+    socket.on("leaderboard:update", ({ entries }) => {
+      show("board", true);
+      $("boardList").innerHTML = entries.map(e => `<li>${e.name} — ${e.score}</li>`).join("");
+    });
+
+    socket.on("game:ended", ({ entries }) => {
+      show("reveal", false);
+      show("question", false);
+      show("board", true);
+      $("boardList").innerHTML = entries.map(e => `<li>${e.name} — ${e.score}</li>`).join("");
+      $("next").disabled = true;
+    });
+
+    socket.on("error", (msg) => alert(msg));
+  </script>
+  </body>
+  </html>
+
