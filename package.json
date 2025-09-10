@@ -1,0 +1,29 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "Play a simple game: pick a stock ticker, see the last 7 trading days before a randomly selected starting date (between 7 and 100 days ago), then predict whether the closing price will go up or down starting the day after the starting date. After each guess, the actual next-day price is revealed, the chart updates, and your score increments by 1 if you were correct (0 otherwise). Continue until you end the game.",
+  "main": "script.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keverlygusto/demo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/keverlygusto/demo/issues"
+  },
+  "homepage": "https://github.com/keverlygusto/demo#readme",
+  "dependencies": {
+    "express": "^5.1.0",
+    "nanoid": "^5.1.5",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

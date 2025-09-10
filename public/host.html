@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Trivia Host</title>
+	<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+	<div class="container">
+		<h1>Trivia Host</h1>
+		<div id="setup">
+			<button id="createRoomBtn">Create Game</button>
+			<div id="pinWrap" class="hidden">PIN: <span id="pin"></span></div>
+			<div class="flex">
+				<label>Question count <input id="questionCount" type="number" min="1" value="30"></label>
+				<label><input id="shuffle" type="checkbox" checked> Shuffle</label>
+			</div>
+		</div>
+
+		<div id="players" class="panel hidden">
+			<h3>Players</h3>
+			<ul id="playerList"></ul>
+		</div>
+
+		<div id="editor" class="panel">
+			<h3>Questions Editor</h3>
+			<div class="flex">
+				<button id="loadDefaultsBtn">Load 30 Defaults</button>
+				<button id="addQuestionBtn">Add Question</button>
+				<button id="saveQuestionsBtn">Save to Game</button>
+			</div>
+			<div id="questions"></div>
+		</div>
+
+		<div id="controls" class="panel hidden">
+			<h3>Game Controls</h3>
+			<div class="flex">
+				<button id="startBtn">Start</button>
+				<button id="revealBtn">Reveal</button>
+				<button id="nextBtn">Next</button>
+				<button id="endBtn">End</button>
+			</div>
+			<div id="status"></div>
+		</div>
+
+		<div id="questionView" class="panel hidden">
+			<h3 id="qProgress"></h3>
+			<div id="qText"></div>
+			<ol id="qOptions"></ol>
+			<div id="leaderboard"></div>
+		</div>
+	</div>
+
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="/host.js"></script>
+</body>
+</html>
+
