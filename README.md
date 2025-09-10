@@ -1,38 +1,71 @@
-# Stock Direction Prediction Game
+# Team Trivia (PIN-based)
 
-Play a simple game: pick a stock ticker, see the last 7 trading days before a randomly selected starting date (between 7 and 100 days ago), then predict whether the closing price will go up or down starting the day after the starting date. After each guess, the actual next-day price is revealed, the chart updates, and your score increments by 1 if you were correct (0 otherwise). Continue until you end the game.
+A lightweight real-time trivia game for team socials. Host controls the game; players join with a 6-digit PIN on their own devices. Questions support 4 options with either 1 or 2 correct answers. Ships with 30 editable starter questions and supports changing the question count.
 
-Data source: Alpha Vantage (real market data). No demo data is used.
+## Quick Start
 
-## Local Development
+1. Install dependencies
 
-This is a static site. You can open `index.html` directly in a browser, or use any static file server.
+```bash
+npm install
+```
 
-## GitHub Pages Deployment
+2. Start the server
 
-1. Create a new GitHub repository and push these files.
-2. In your repo, go to Settings → Pages.
-3. Set Source to `Deploy from a branch` and pick the `main` branch, `/ (root)` folder.
-4. Save. GitHub Pages will publish your site at `https://<your-username>.github.io/<repo-name>/`.
+```bash
+npm run dev
+```
 
-If you deploy to a subdirectory, all asset paths here are relative, so it should work as-is.
+3. Open the pages
+- Host: `http://localhost:3000/host.html`
+- Player: `http://localhost:3000/player.html`
 
-## Alpha Vantage API Key
+Create the room on the host page to generate a PIN. Share the PIN with participants to join.
 
-This project uses the provided API key embedded in `script.js` for demonstration. For your own usage, consider storing an API key in a build-time variable or using a proxy if you want to keep it private. Alpha Vantage free tier limits apply (5 requests per minute; 100 per day).
+## Features
+- Multiple choice questions (4 options) with 1 or 2 correct answers
+- 30 starter questions in `public/questions.json`
+- Change question count and shuffle order before starting
+- Real-time room with 6-digit PIN
+- Leaderboard with +1 point per fully correct answer
+- Host can edit or add questions directly in the UI
 
-## How It Works
+## Editing Questions
+- Use the Questions Editor on the host page
+- Click "Load 30 Defaults" to load from `public/questions.json`
+- For each question set:
+  - Text
+  - Four options (A–D)
+  - Number of correct answers (1 or 2)
+  - Check the correct option(s)
+- Click "Save to Game" to push updates to the server
 
-- Enter a ticker (e.g., MSFT, COF) and load.
-- The app fetches `TIME_SERIES_DAILY_ADJUSTED` from Alpha Vantage and parses daily adjusted closes.
-- A starting trading day is picked uniformly at random from dates in the last 100 to 7 calendar days.
-- The chart initially shows the 7 trading days before that starting day.
-- You guess up/down for the day after the starting day. The app computes correctness using the hidden start-day close versus the next day close, reveals the next day on the chart, advances the current date, and updates your score.
-- Repeat until you click End Game.
+## Game Flow
+1. Host creates room → shares PIN
+2. Players join via player page
+3. Host sets question count and clicks Start
+4. For each question:
+   - Players select up to N answers (N = 1 or 2)
+   - Host clicks Reveal to show correct answers and update scores
+   - Host clicks Next to continue
+5. After last question, game ends and final leaderboard remains
+
+## Deploying
+This is a single Node.js process. For production:
+- Set `PORT` env var if needed
+- Serve behind a reverse proxy (e.g., Nginx)
+- Use a process manager like `pm2` or systemd
+
+```bash
+PORT=8080 node server.js
+```
+
+## Tech Stack
+- Node.js, Express
+- Socket.IO for real-time events
+- Vanilla HTML/CSS/JS for UI
 
 ## Notes
-
-- Invalid tickers and API errors are handled with user-friendly messages.
-- Because Alpha Vantage returns trading days only, the randomly selected starting date will inherently be a non-holiday weekday.
-
-# demo
+- Scoring gives 1 point only when a player selects exactly the correct set
+- Players can join mid-game; they will see the current question
+- Host disconnect ends the room
