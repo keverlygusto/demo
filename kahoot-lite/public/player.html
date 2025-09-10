@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Kahoot-Lite Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid #444; cursor: pointer; }
+    .choices { display:grid; grid-template-columns: 1fr; gap:12px; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#eee; margin-right:8px; }
+    h1,h2,h3 { margin: 8px 0; }
+    input { padding: 8px 10px; border: 1px solid #aaa; border-radius: 8px; }
+    .muted { color: #666; }
+    .success { color: #0a0; }
+    .error { color: #a00; }
+    .disabled { opacity: 0.6; pointer-events: none; }
+  </style>
+  <link rel="icon" href="data:," />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' ws: http: https:; connect-src * ws:;" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="noindex" />
+</head>
+<body>
+  <h1>Kahoot-Lite Player</h1>
+
+  <div class="card" id="join">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <label>PIN <input id="pin" placeholder="123456" maxlength="6" pattern="[0-9]{6}" /></label>
+      <label>Name <input id="name" placeholder="Your name" /></label>
+      <button id="joinBtn" class="btn">Join</button>
+    </div>
+    <div id="joinMsg" class="muted" style="margin-top:8px;">Enter the PIN from the host screen.</div>
+  </div>
+
+  <div class="card" id="waiting" style="display:none;">
+    <h2>Waiting for question…</h2>
+    <div id="whoami" class="muted"></div>
+  </div>
+
+  <div class="card" id="question" style="display:none;">
+    <h2 id="qPrompt"></h2>
+    <div>Time left: <span id="timeLeft">—</span>s</div>
+    <div class="choices" id="qChoices"></div>
+    <div id="answerMsg" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card" id="reveal" style="display:none;">
+    <h2>Answer revealed</h2>
+    <div>Correct choice: <b id="correct">—</b></div>
+    <div class="muted">Watch the leaderboard on the host screen.</div>
+  </div>
+
+  <div class="card" id="board" style="display:none;">
+    <h2>Leaderboard</h2>
+    <ol id="boardList"></ol>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let joined = false;
+    let pin = null;
+    let myName = null;
+    let answered = false;
+    let timer = null;
+    let endsAt = 0;
+
+    const $ = (id) => document.getElementById(id);
+    const show = (id, on=true) => ($(id).style.display = on ? "block" : "none");
+
+    $("joinBtn").onclick = () => {
+      const pinInput = $("pin").value.trim();
+      const nameInput = $("name").value.trim() || "Player";
+      if (!/^\d{6}$/.test(pinInput)) {
+        $("joinMsg").textContent = "Please enter a valid 6-digit PIN";
+        $("joinMsg").className = "error";
+        return;
+      }
+      socket.emit("player:join", { pin: pinInput, name: nameInput }, (res) => {
+        if (!res?.ok) {
+          $("joinMsg").textContent = res?.error || "Failed to join";
+          $("joinMsg").className = "error";
+          return;
+        }
+        joined = true;
+        pin = pinInput;
+        myName = res.name || nameInput;
+        $("joinMsg").textContent = "Joined! Waiting for host…";
+        $("joinMsg").className = "success";
+        $("whoami").textContent = `Joined as ${myName} (PIN ${pin})`;
+        show("join", false);
+        show("waiting", true);
+      });
+    };
+
+    function renderChoices(choices) {
+      $("qChoices").innerHTML = choices
+        .map((c, i) => `<button class=\"btn\" data-i=\"${i}\">${String.fromCharCode(65+i)}. ${c}</button>`)
+        .join("");
+      for (const btn of $("qChoices").querySelectorAll("button")) {
+        btn.onclick = () => submitAnswer(Number(btn.dataset.i));
+      }
+    }
+
+    function setChoicesDisabled(disabled) {
+      for (const btn of $("qChoices").querySelectorAll("button")) {
+        btn.disabled = disabled;
+        btn.classList.toggle("disabled", !!disabled);
+      }
+    }
+
+    function submitAnswer(choiceIdx) {
+      if (!joined || answered) return;
+      answered = true;
+      setChoicesDisabled(true);
+      $("answerMsg").textContent = "Answer sent!";
+      socket.emit("player:answer", { pin, choiceIdx }, (res) => {
+        if (!res?.ok && !res?.already) {
+          $("answerMsg").textContent = "Could not submit answer.";
+          $("answerMsg").className = "error";
+        }
+      });
+    }
+
+    socket.on("lobby:update", (lobby) => {
+      if (!joined) return;
+      show("waiting", true);
+    });
+
+    socket.on("question:show", (q) => {
+      answered = false;
+      $("answerMsg").textContent = "";
+      show("waiting", false);
+      show("reveal", false);
+      show("board", false);
+      show("question", true);
+      $("qPrompt").textContent = `Q${q.index+1}/${q.total}: ${q.prompt}`;
+      renderChoices(q.choices);
+      setChoicesDisabled(false);
+      // countdown
+      endsAt = Date.now() + q.timeLimitSec*1000;
+      $("timeLeft").textContent = q.timeLimitSec;
+      if (timer) clearInterval(timer);
+      timer = setInterval(() => {
+        const left = Math.max(0, Math.ceil((endsAt - Date.now())/1000));
+        $("timeLeft").textContent = left;
+        if (left <= 0) clearInterval(timer);
+      }, 200);
+    });
+
+    socket.on("question:progress", ({ remaining }) => {
+      // Optionally display remaining
+    });
+
+    socket.on("question:reveal", ({ correctIndex }) => {
+      show("question", false);
+      show("reveal", true);
+      $("correct").textContent = String.fromCharCode(65 + correctIndex);
+    });
+
+    socket.on("leaderboard:update", ({ entries }) => {
+      show("board", true);
+      $("boardList").innerHTML = entries.map(e => `<li>${e.name} — ${e.score}</li>`).join("");
+    });
+
+    socket.on("game:ended", ({ entries }) => {
+      show("reveal", false);
+      show("question", false);
+      show("board", true);
+      $("boardList").innerHTML = entries.map(e => `<li>${e.name} — ${e.score}</li>`).join("");
+    });
+
+    socket.on("error", (msg) => alert(msg));
+  </script>
+  </body>
+  </html>
+
